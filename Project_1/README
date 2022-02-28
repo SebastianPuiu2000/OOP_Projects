@@ -1,0 +1,81 @@
+Puiu Sebastian-Andrei
+		331CC
+
+							Tema #1 Paralelizarea unui algoritm genetic
+
+	In cadrul acestei teme, pentru a putea realiza paralelizarea operatiilor, mai intai am inspectat 
+algoritmul secvential. Se observa ca operatiile de selectie, mutatie si crossover pot fi atribuite 
+usor thread-urilor, in felul urmator: intervalele din generatia curenta pe care erau efectuate aceste 
+operatii pot fi usor impartite pe bucati. Astfel, fiecare thread primeste cate o portiune in care este 
+responsabil sa efectueze operatiile enumerate anterior.	Pentru a putea determina "range-ul" de actiune 
+al fiecarui thread, am folosit formulele prezentate si utilizate in cadrul laboratorului:
+
+start = arguments->thread_id * (double) X / arguments->thread_count
+end = mini((arguments->thread_id + 1) * (double) X / arguments->thread_count, X)
+
+,unde X reprezinta finalul intervalului ce se dorea atins in implementarea secventiala.
+
+	La inceputul algoritmului, exista o parte de initializare, pe care am putut sa o paralelizez 
+folosind tot aceste formule, utilizate de catre fiecare thread.
+	De asemenea, am remarcat ca si functia compute_fitness poate fi paralelizata, intrucat si aici 
+generatia curenta poate fi impartita in mai multe bucati, ce pot fi atribuite fiecarui thread, intocmai 
+ca in explicatiile anterioare. Astfel, fiecarui individ din generatia curenta ii va fi calculat si 
+atribuit fitness-ul prin intermediul thread-urilor. In continuare, am observat ca si sortarea indivizilor 
+dupa fitness poate fi paralelizata in felul urmator: mai multe operatii de merge pe portiuni sortate.
+Cum am mai mentionat, fiecarui thread ii este alocata o portiune din generatia curenta. Dupa care, 
+toate thread-urile aplica operatia quick_sort pe portiunea asociata lui. De asemenea, este necesara 
+atat retinerea unor delimitatori, pentru a putea stii intre ce intervale se poate face operatia 
+de merge, cat si calcularea numarului de sectiuni asupra carora mai este nevoie sa fie realizata 
+aceasta operatie. Cat timp numarul de sectiuni este mai mare decat unu, cu siguranta vor mai exista 
+operatii de merge asupra bucatilor din generatia curenta. In continuare, daca id-ului thread-ului 
+curent este par si nu depaseste numarul de sectiuni ramase, acesta va putea sa faca merge folosind 
+delimitatorii enuntati in randurile de mai sus. Fiecare thread, ajuns in aceasta situatie, va avea 
+nevoie de un punct de start, unul de mijloc si unul de final. Astfel, el va face merge intre sectiunile 
+date de intervalele start-mid si mid-end. Punctul de start este conferit de delimitatorul ce se regaseste 
+la pozitia id-ul thread-ului in cauza, iar punctul de mid si cel de end vor fi conferite de delimitatorii 
+regasiti la urmatoarele doua pozitii de dupa cea folosita in determinarea lui start. Intrucat sectiunile 
+se modifica in urma operatiei de merge, acestea devenind din ce in ce mai mari, trebuie actualizati si 
+delimitatorii. De acest aspect este responasabil un singur thread, cel cu id-ul 0. Astfel, el va permuta 
+delimitatorii catre stanga pornind de la un punct de referinta (acest punct de referinta se va schimba 
+doar in momentul in care se termina lantul curent de permutari si se va transforma in cel de pe pozitia 
+imediat urmatoare fata de el), pentru ca acestia sa coincida cu "granitele" noilor sectiuni (de care se 
+vor ocupa thread-urile la urmatoarea iteratie), ce urmeaza sa fie supuse unor noi operatii de merge. 
+De asemenea, este absolut necesara si actualizarea numarului de sectiuni care trebuie sa fie imbinate 
+la pasul urmator. Mentionez ca pentru a putea face merge intre 2 siruri ordonate, am utilizat functia 
+de merge din cadrul laboratorului 3, pe care am adaptat-o (folosind functia cmpfunc deja existenta 
+in schelet) in vederea utilizarii criteriilor de ordonare dorite in cadrul temei. Ultima paralelizare 
+efectuata este reprezentata de reindexarea tuturor indivizilor din generatia curenta (care mai inainte era 
+de fapt cea urmatoare), paralelizare in care am folosit aceleasi formule ca cele prezentate la inceput. 
+Inainte de anumite operatii a fost nevoie sa am siguranta ca toate thread-urile au terminat de efectuat 
+"task-urile" lor anterioare (dorind astfel o anumita sincronizare intre ele), motiv pentru care am folosit 
+bariere in mai multe puncte. Initial, am folosit si mutex-uri, insa am observat ca acestea influenteaza 
+destul de mult scalabilitatea programului, intrucat acestea ar forta thread-urile sa faca operatiile pe 
+rand, iar asa se pierde prea mult timp. Prin urmare, am renuntat la mutex-uri, folosind doar bariere si 
+asigurandu-ma ca thread-urile nu vor accesa simultan, in niciun moment, aceeasi zona de memorie. In caz 
+contrar, pot exista situatii de segmentation fault nedorite.
+	In partea anterioara am explicat ce se intampla in fisierul genetic_algorithm_par.c, iar in randurile 
+ce urmeaza o sa prezint tema1_par.c . Aici sunt "pornite" toate thread-urile si li se atribuie functia in 
+care vor opera. Pentru a evita problema cu variabilele globale, am utilizat o structura in care am adaugat 
+toate campurile necesare pentru functia in care o sa lucreze thread-ul. Mentionez ca toate thread-urile 
+folosesc acceasi zona de memorie in cadrul anumitor campuri, pentru ca modificarile efectuate asupra lor 
+sa poata fi vizibile in oricare dintre ele (de exemplu current_generation, next_generation, etc.) . Un camp 
+din aceasta categorie, foarte important de altfel pentru o functionare corecta a programului, este reprezentat 
+de cel al barierei. Dupa initializarea tuturor acestor campuri, ele vor fi transmise, pentru fiecare thread, 
+drept argumente catre functia run_genetic_algorithm, functie in cadrul careia acestea vor fi preluate. Dupa ce 
+toate thread-urile vor termina de executat instructiunile din functie, acestea vor da join inapoi in main, iar 
+programul poate lua sfarsit. Mentionez ca thread-urile au fost pornite si oprite o singura data pe tot 
+parcursul programului, acestea fiind folosite pe toate operatiile descrise in randurile de mai sus.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
